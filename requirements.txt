@@ -1,0 +1,7 @@
+anki==2.1.49
+aqt==2.1.49
+pyqt5
+pyqt6
+mypy
+black
+isort
