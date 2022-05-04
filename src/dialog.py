@@ -68,6 +68,12 @@ class DeckSeparatorDialog(QDialog):
             finally:
                 self.form.separatorFieldComboBox.clear()
                 self.form.separatorFieldComboBox.addItems(self.fields)
+                parent_deck = self.mw.col.decks.immediate_parent(
+                    self.mw.col.decks.name(did)
+                )
+                if not parent_deck:
+                    parent_deck = ""
+                self.form.parentDeckLineEdit.setText(parent_deck)
                 self.mw.progress.finish()
 
         self.mw.taskman.run_in_background(collect_fields, on_done=on_done)
@@ -95,8 +101,6 @@ class DeckSeparatorDialog(QDialog):
         separator_field = self.config["separator_field"]
         if separator_field := self._get_field(self.fields, separator_field):
             self.form.separatorFieldComboBox.setCurrentText(separator_field)
-        parent_deck = self.config["parent_deck"]
-        self.form.parentDeckLineEdit.setText(parent_deck)
         return super().exec()
 
     def accept(self) -> None:
@@ -143,12 +147,15 @@ class DeckSeparatorDialog(QDialog):
 
     def on_process(self):
         if self.form.separatorFieldComboBox.currentIndex() < 0:
-            showWarning("No cards in the selected deck. Please choose another deck.", parent=self, title=consts.ADDON_NAME)
+            showWarning(
+                "No cards in the selected deck. Please choose another deck.",
+                parent=self,
+                title=consts.ADDON_NAME,
+            )
             return
         separator_field = self.fields[self.form.separatorFieldComboBox.currentIndex()]
         parent_deck = self.form.parentDeckLineEdit.text()
         self.config["separator_field"] = separator_field
-        self.config["parent_deck"] = parent_deck
         self.mw.addonManager.writeConfig(__name__, self.config)
 
         def on_done(fut: Future):
