@@ -176,7 +176,7 @@ class DeckSeparatorDialog(QDialog):
             if len(decks) > self.DECK_LIMIT:
                 dialog = askUserDialog(
                     f"""
-This will result in creating more than {self.DECK_LIMIT} decks. \
+This will result in creating {len(decks)} decks. \
 Note that large deck list trees can break display and result in a blank screen \
 in Anki versions before 2.1.50. Are you sure you want to continue?
                 """,
