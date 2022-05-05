@@ -1,5 +1,4 @@
 from aqt import mw
-from aqt.browser.browser import Browser
 from aqt.qt import *
 from aqt.utils import tooltip
 
@@ -17,6 +16,6 @@ def on_action_triggered() -> None:
 config = mw.addonManager.getConfig(__name__)
 a = QAction(consts.ADDON_NAME, mw)
 a.setShortcut(config["shortcut"])
-qconnect(a.triggered, lambda: on_action_triggered())
+qconnect(a.triggered, on_action_triggered)
 mw.form.menuTools.addSeparator()
 mw.form.menuTools.addAction(a)

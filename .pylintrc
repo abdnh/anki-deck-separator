@@ -1,0 +1,22 @@
+[MASTER]
+ignore=venv,forms
+extension-pkg-whitelist=PyQt6,PyQt5
+
+[REPORTS]
+output-format=colorized
+
+[MESSAGES CONTROL]
+disable=
+  missing-function-docstring,
+  missing-module-docstring,
+  missing-class-docstring,
+  wildcard-import,
+  unused-wildcard-import,
+  attribute-defined-outside-init,
+  ungrouped-imports,
+  no-self-use,
+
+[BASIC]
+good-names =
+  i,
+  mw,

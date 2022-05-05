@@ -12,17 +12,18 @@ from aqt.main import AnkiQt
 from aqt.qt import *
 from aqt.utils import askUserDialog, showWarning
 
+from . import consts
+
 try:
     from anki.utils import strip_html
-except:
+except ImportError:
     from anki.utils import stripHTML as strip_html
 
 if qtmajor > 5:
-    from .form_qt6 import Ui_Dialog
+    from .forms.form_qt6 import Ui_Dialog
 else:
-    from .form_qt5 import Ui_Dialog  # type: ignore
+    from .forms.form_qt5 import Ui_Dialog  # type: ignore
 
-from . import consts
 
 ANKI_POINT_VERSION = int(anki.version.split(".")[-1])
 
@@ -45,7 +46,7 @@ class DeckSeparatorDialog(QDialog):
         self.config = mw.addonManager.getConfig(__name__)
         self.setup_ui()
 
-    def update_fields(self, did: DeckId):
+    def update_fields(self, did: DeckId) -> None:
         self.nids: List[NoteId] = []
         self.fields: List[str] = []
         search = self.mw.col.build_search_string(
@@ -54,7 +55,7 @@ class DeckSeparatorDialog(QDialog):
         self.mw.progress.start(parent=self, label="Getting field names...")
         self.mw.progress.set_title(consts.ADDON_NAME)
 
-        def collect_fields():
+        def collect_fields() -> None:
             for nid in self.mw.col.find_notes(search):
                 self.nids.append(nid)
                 note = self.mw.col.get_note(nid)
@@ -62,7 +63,7 @@ class DeckSeparatorDialog(QDialog):
                     if field not in self.fields:
                         self.fields.append(field)
 
-        def on_done(fut: Future):
+        def on_done(fut: Future) -> None:
             try:
                 fut.result()
             finally:
@@ -78,23 +79,23 @@ class DeckSeparatorDialog(QDialog):
 
         self.mw.taskman.run_in_background(collect_fields, on_done=on_done)
 
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         self.form = Ui_Dialog()
         self.form.setupUi(self)
         self.setWindowTitle(consts.ADDON_LONG_NAME)
         qconnect(self.form.processButton.clicked, self.on_process)
         if ANKI_POINT_VERSION >= 50:
-            self.deckChooser = MyDeckChooser(
+            self.deck_chooser = MyDeckChooser(
                 self.mw,
                 self.form.deckChooser,
                 label=False,
                 on_deck_changed=self.update_fields,
             )
         else:
-            self.deckChooser = MyDeckChooser(
+            self.deck_chooser = MyDeckChooser(
                 self.mw, self.form.deckChooser, label=False
             )
-            qconnect(self.deckChooser.onDeckChanged, self.update_fields)
+            qconnect(self.deck_chooser.onDeckChanged, self.update_fields)
 
     def exec(self) -> int:
         self.update_fields(self.mw.col.decks.current()["id"])
@@ -104,10 +105,10 @@ class DeckSeparatorDialog(QDialog):
         return super().exec()
 
     def accept(self) -> None:
-        self.deckChooser.cleanup()
+        self.deck_chooser.cleanup()
         return super().accept()
 
-    def _get_field(self, fields: List[str], key) -> Optional[str]:
+    def _get_field(self, fields: List[str], key: str) -> Optional[str]:
         for field in fields:
             if key.lower() == field.lower():
                 return field
@@ -125,7 +126,7 @@ class DeckSeparatorDialog(QDialog):
                 decks[field_value].extend(note.card_ids())
             if i % 100 == 0:
                 self.mw.taskman.run_on_main(
-                    lambda: self.mw.progress.update(
+                    lambda i=i: self.mw.progress.update(
                         f"Processed {i+1} out of {len(self.nids)} notes..."
                     )
                 )
@@ -138,14 +139,14 @@ class DeckSeparatorDialog(QDialog):
                 deck_name = f"{parent_deck}::{deck_name}"
             deck_id = self.mw.col.decks.id(deck_name)
             self.mw.taskman.run_on_main(
-                lambda: self.mw.progress.update(
+                lambda cids=cids, deck_name=deck_name: self.mw.progress.update(
                     f"Moving {len(cids)} cards to deck {deck_name}..."
                 )
             )
             self.mw.col.set_deck(cids, deck_id)
         return len(decks)
 
-    def on_process(self):
+    def on_process(self) -> None:
         if self.form.separatorFieldComboBox.currentIndex() < 0:
             showWarning(
                 "No cards in the selected deck. Please choose another deck.",
@@ -158,14 +159,14 @@ class DeckSeparatorDialog(QDialog):
         self.config["separator_field"] = separator_field
         self.mw.addonManager.writeConfig(__name__, self.config)
 
-        def on_done(fut: Future):
+        def on_done(fut: Future) -> None:
             try:
                 self.deck_count = fut.result()
             finally:
                 self.mw.progress.finish()
             self.accept()
 
-        def on_done_collecting_decks(fut: Future):
+        def on_done_collecting_decks(fut: Future) -> None:
             try:
                 decks = fut.result()
             except Exception as exc:
