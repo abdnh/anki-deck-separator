@@ -161,7 +161,7 @@ class DeckSeparatorDialog(QDialog):
         separator_field: str,
         number_of_notes: int,
         duplicate_deck_name: str,
-        deck_name: str,
+        selected_deck_name: str,
     ) -> Dict[str, List[CardId]]:
         decks: Dict[str, List[CardId]] = {}
         if separator_field:
@@ -198,11 +198,10 @@ class DeckSeparatorDialog(QDialog):
                             deck_idx = j
                             break
                     if deck_idx != -1:
-                        base_name = self.mw.col.decks.basename(
-                            self.deck_tree[deck_idx][0]
-                        )
-                        if base_name != deck_name:
-                            deck_name = duplicate_deck_name + "::" + base_name
+                        full_name = self.deck_tree[deck_idx][0]
+                        subname = "::".join(self.mw.col.decks.path(full_name)[1:])
+                        if selected_deck_name != full_name:
+                            deck_name = duplicate_deck_name + "::" + subname
                         else:
                             # tree root
                             deck_name = duplicate_deck_name
