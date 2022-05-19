@@ -267,7 +267,9 @@ class DeckSeparatorDialog(QDialog):
         parent_deck = self.form.parentDeckLineEdit.text()
         number_of_notes = self.form.numberOfCardsSpinBox.value()
         duplicate_deck = self.form.duplicateDeckRadioButton.isChecked()
-        duplicate_deck_name = self.form.duplicateDeckNameLineEdit.text()
+        duplicate_deck_name = (
+            self.form.duplicateDeckNameLineEdit.text() if duplicate_deck else ""
+        )
         self.config["separator_field"] = separator_field
         self.config["number_of_notes"] = number_of_notes
         self.config["duplicate_deck"] = duplicate_deck
