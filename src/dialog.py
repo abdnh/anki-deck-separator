@@ -1,5 +1,7 @@
+import math
 from concurrent.futures import Future
-from typing import Dict, List, Optional
+from itertools import zip_longest
+from typing import Dict, Iterable, List, Optional
 
 import anki
 from anki.cards import CardId
@@ -26,6 +28,10 @@ else:
 
 
 ANKI_POINT_VERSION = int(anki.version.split(".")[-1])
+
+
+def groups_of_n(iterable: Iterable, n: int) -> Iterable:
+    return zip_longest(*[iter(iterable)] * n)
 
 
 class MyDeckChooser(DeckChooser):
@@ -96,12 +102,28 @@ class DeckSeparatorDialog(QDialog):
                 self.mw, self.form.deckChooser, label=False
             )
             qconnect(self.deck_chooser.onDeckChanged, self.update_fields)
+        qconnect(
+            self.form.separatorFieldRadioButton.toggled,
+            lambda t: self.form.separatorFieldComboBox.setEnabled(t),
+        )
+        qconnect(
+            self.form.numberOfCardsRadioButton.toggled,
+            lambda t: self.form.numberOfCardsSpinBox.setEnabled(t),
+        )
 
     def exec(self) -> int:
         self.update_fields(self.mw.col.decks.current()["id"])
         separator_field = self.config["separator_field"]
+        number_of_notes = self.config["number_of_notes"]
         if separator_field := self._get_field(self.fields, separator_field):
             self.form.separatorFieldComboBox.setCurrentText(separator_field)
+            self.form.separatorFieldRadioButton.setChecked(True)
+            self.form.numberOfCardsRadioButton.setChecked(False)
+        else:
+            self.form.numberOfCardsRadioButton.setChecked(True)
+            self.form.numberOfCardsSpinBox.setValue(number_of_notes)
+            self.form.separatorFieldRadioButton.setChecked(False)
+
         return super().exec()
 
     def accept(self) -> None:
@@ -114,20 +136,43 @@ class DeckSeparatorDialog(QDialog):
                 return field
         return None
 
-    def _collect_decks(self, separator_field: str) -> Dict[str, List[CardId]]:
+    def _collect_decks(
+        self, separator_field: str, number_of_notes: int
+    ) -> Dict[str, List[CardId]]:
         decks: Dict[str, List[CardId]] = {}
-        for i, nid in enumerate(self.nids):
-            note = self.mw.col.get_note(nid)
-            if separator_field not in note:
-                continue
-            field_value = strip_html(note[separator_field])
-            if field_value:
-                decks.setdefault(field_value, [])
-                decks[field_value].extend(note.card_ids())
-            if i % 100 == 0:
+        if separator_field:
+            for i, nid in enumerate(self.nids):
+                note = self.mw.col.get_note(nid)
+                if separator_field not in note:
+                    continue
+                field_value = strip_html(note[separator_field])
+                if field_value:
+                    decks.setdefault(field_value, [])
+                    decks[field_value].extend(note.card_ids())
+                if i % 100 == 0:
+                    self.mw.taskman.run_on_main(
+                        lambda i=i: self.mw.progress.update(
+                            f"Processed {i+1} out of {len(self.nids)} notes..."
+                        )
+                    )
+        else:
+            pad = math.ceil(math.log10(len(self.nids)))
+            for i, nid_group in enumerate(groups_of_n(self.nids, number_of_notes)):
+                start = str(i * number_of_notes + 1).zfill(pad)
+                end = str((i + 1) * number_of_notes).zfill(pad)
+                if i * number_of_notes != len(self.nids):
+                    group_len = len(self.nids) - i * number_of_notes
+                    # end = str(i * number_of_notes + group_len).zfill(pad)
+                    nid_group = nid_group[:group_len]
+                deck_name = f"{start}-{end}"
+                cids = []
+                for nid in nid_group:
+                    note = self.mw.col.get_note(nid)
+                    cids.extend(note.card_ids())
+                decks[deck_name] = cids
                 self.mw.taskman.run_on_main(
                     lambda i=i: self.mw.progress.update(
-                        f"Processed {i+1} out of {len(self.nids)} notes..."
+                        f"Processed {(i+1) * number_of_notes} out of {len(self.nids)} notes..."
                     )
                 )
         return decks
@@ -154,9 +199,15 @@ class DeckSeparatorDialog(QDialog):
                 title=consts.ADDON_NAME,
             )
             return
-        separator_field = self.fields[self.form.separatorFieldComboBox.currentIndex()]
+        separator_field = (
+            self.fields[self.form.separatorFieldComboBox.currentIndex()]
+            if self.form.separatorFieldRadioButton.isChecked()
+            else ""
+        )
         parent_deck = self.form.parentDeckLineEdit.text()
+        number_of_notes = self.form.numberOfCardsSpinBox.value()
         self.config["separator_field"] = separator_field
+        self.config["number_of_notes"] = number_of_notes
         self.mw.addonManager.writeConfig(__name__, self.config)
 
         def on_done(fut: Future) -> None:
@@ -205,6 +256,6 @@ in Anki versions before 2.1.50. Are you sure you want to continue?
         self.mw.progress.start(parent=self)
         self.mw.progress.set_title(consts.ADDON_NAME)
         self.mw.taskman.run_in_background(
-            lambda: self._collect_decks(separator_field),
+            lambda: self._collect_decks(separator_field, number_of_notes),
             on_done=on_done_collecting_decks,
         )

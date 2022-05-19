@@ -1,4 +1,5 @@
 {
     "shortcut": "",
-    "separator_field": "word"
+    "separator_field": "word",
+    "number_of_notes": 100
 }
