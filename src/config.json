@@ -1,5 +1,6 @@
 {
     "shortcut": "",
     "separator_field": "word",
-    "number_of_notes": 100
+    "number_of_notes": 100,
+    "duplicate_deck": false
 }

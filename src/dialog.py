@@ -53,15 +53,18 @@ class DeckSeparatorDialog(QDialog):
         self.setup_ui()
 
     def update_fields(self, did: DeckId) -> None:
+        deck_name = self.deck_chooser.selected_deck_name()
+        self.form.duplicateDeckNameLineEdit.setText(deck_name + "_dup")
         self.nids: List[NoteId] = []
+        # self.cids = List[CardId] = []
         self.fields: List[str] = []
-        search = self.mw.col.build_search_string(
-            SearchNode(deck=self.mw.col.decks.get(did)["name"])
-        )
+        search = self.mw.col.build_search_string(SearchNode(deck=deck_name))
         self.mw.progress.start(parent=self, label="Getting field names...")
         self.mw.progress.set_title(consts.ADDON_NAME)
 
         def collect_fields() -> None:
+            self.deck_tree = self.mw.col.decks.children(did) + [(deck_name, did)]
+            # self.cids = self.mw.col.decks.cids(did, children=True)
             for nid in self.mw.col.find_notes(search):
                 self.nids.append(nid)
                 note = self.mw.col.get_note(nid)
@@ -110,19 +113,30 @@ class DeckSeparatorDialog(QDialog):
             self.form.numberOfCardsRadioButton.toggled,
             lambda t: self.form.numberOfCardsSpinBox.setEnabled(t),
         )
+        qconnect(
+            self.form.duplicateDeckRadioButton.toggled,
+            lambda t: self.form.duplicateDeckNameLineEdit.setEnabled(t),
+        )
 
     def exec(self) -> int:
         self.update_fields(self.mw.col.decks.current()["id"])
         separator_field = self.config["separator_field"]
         number_of_notes = self.config["number_of_notes"]
+        duplicate_deck = self.config["duplicate_deck"]
         if separator_field := self._get_field(self.fields, separator_field):
+            self.form.numberOfCardsRadioButton.toggled.emit(False)
+            self.form.duplicateDeckRadioButton.toggled.emit(False)
             self.form.separatorFieldComboBox.setCurrentText(separator_field)
             self.form.separatorFieldRadioButton.setChecked(True)
-            self.form.numberOfCardsRadioButton.setChecked(False)
+        elif duplicate_deck:
+            self.form.separatorFieldRadioButton.toggled.emit(False)
+            self.form.numberOfCardsRadioButton.toggled.emit(False)
+            self.form.duplicateDeckRadioButton.setChecked(True)
         else:
+            self.form.separatorFieldRadioButton.toggled.emit(False)
+            self.form.duplicateDeckRadioButton.toggled.emit(False)
             self.form.numberOfCardsRadioButton.setChecked(True)
             self.form.numberOfCardsSpinBox.setValue(number_of_notes)
-            self.form.separatorFieldRadioButton.setChecked(False)
 
         return super().exec()
 
@@ -137,7 +151,11 @@ class DeckSeparatorDialog(QDialog):
         return None
 
     def _collect_decks(
-        self, separator_field: str, number_of_notes: int
+        self,
+        separator_field: str,
+        number_of_notes: int,
+        duplicate_deck_name: str,
+        deck_name: str,
     ) -> Dict[str, List[CardId]]:
         decks: Dict[str, List[CardId]] = {}
         if separator_field:
@@ -155,6 +173,42 @@ class DeckSeparatorDialog(QDialog):
                             f"Processed {i+1} out of {len(self.nids)} notes..."
                         )
                     )
+        elif duplicate_deck_name:
+            for i, nid in enumerate(self.nids):
+                note = self.mw.col.get_note(nid)
+                note_type = note.note_type()
+                dup_note = self.mw.col.new_note(note_type["id"])
+                for key, value in note.items():
+                    dup_note[key] = value
+                dup_note.tags = note.tags
+                self.mw.col.add_note(dup_note, DeckId(1))
+                dup_note = self.mw.col.get_note(dup_note.id)
+                new_cids = dup_note.card_ids()
+                for cid_i, cid in enumerate(note.card_ids()):
+                    card = self.mw.col.get_card(cid)
+                    deck_idx = -1
+                    for j, child in enumerate(self.deck_tree):
+                        if card.did == child[1]:
+                            deck_idx = j
+                            break
+                    if deck_idx != -1:
+                        base_name = self.mw.col.decks.basename(
+                            self.deck_tree[deck_idx][0]
+                        )
+                        if base_name != deck_name:
+                            deck_name = duplicate_deck_name + "::" + base_name
+                        else:
+                            # tree root
+                            deck_name = duplicate_deck_name
+                        decks.setdefault(deck_name, [])
+                        decks[deck_name].append(new_cids[cid_i])
+                if i % 100 == 0:
+                    self.mw.taskman.run_on_main(
+                        lambda i=i: self.mw.progress.update(
+                            f"Processed {i+1} out of {len(self.nids)} notes..."
+                        )
+                    )
+
         else:
             pad = math.ceil(math.log10(len(self.nids)))
             for i, nid_group in enumerate(groups_of_n(self.nids, number_of_notes)):
@@ -162,10 +216,9 @@ class DeckSeparatorDialog(QDialog):
                 end = str((i + 1) * number_of_notes).zfill(pad)
                 if i * number_of_notes != len(self.nids):
                     group_len = len(self.nids) - i * number_of_notes
-                    # end = str(i * number_of_notes + group_len).zfill(pad)
                     nid_group = nid_group[:group_len]
                 deck_name = f"{start}-{end}"
-                cids = []
+                cids: List[CardId] = []
                 for nid in nid_group:
                     note = self.mw.col.get_note(nid)
                     cids.extend(note.card_ids())
@@ -204,10 +257,14 @@ class DeckSeparatorDialog(QDialog):
             if self.form.separatorFieldRadioButton.isChecked()
             else ""
         )
+        deck_name = self.deck_chooser.selected_deck_name()
         parent_deck = self.form.parentDeckLineEdit.text()
         number_of_notes = self.form.numberOfCardsSpinBox.value()
+        duplicate_deck = self.form.duplicateDeckRadioButton.isChecked()
+        duplicate_deck_name = self.form.duplicateDeckNameLineEdit.text()
         self.config["separator_field"] = separator_field
         self.config["number_of_notes"] = number_of_notes
+        self.config["duplicate_deck"] = duplicate_deck
         self.mw.addonManager.writeConfig(__name__, self.config)
 
         def on_done(fut: Future) -> None:
@@ -240,11 +297,12 @@ in Anki versions before 2.1.50. Are you sure you want to continue?
                 if ret == "Abort":
                     return
             if not decks:
-                showWarning(
-                    "Chosen field is empty in all notes",
-                    parent=self,
-                    title=consts.ADDON_NAME,
-                )
+                if separator_field:
+                    showWarning(
+                        "Chosen field is empty in all notes",
+                        parent=self,
+                        title=consts.ADDON_NAME,
+                    )
                 return
             self.mw.progress.start(label="Creating decks...")
             self.mw.progress.set_title(consts.ADDON_NAME)
@@ -256,6 +314,8 @@ in Anki versions before 2.1.50. Are you sure you want to continue?
         self.mw.progress.start(parent=self)
         self.mw.progress.set_title(consts.ADDON_NAME)
         self.mw.taskman.run_in_background(
-            lambda: self._collect_decks(separator_field, number_of_notes),
+            lambda: self._collect_decks(
+                separator_field, number_of_notes, duplicate_deck_name, deck_name
+            ),
             on_done=on_done_collecting_decks,
         )
