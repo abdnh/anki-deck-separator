@@ -46,11 +46,13 @@ class MyDeckChooser(DeckChooser):
 class DeckSeparatorDialog(QDialog):
     DECK_LIMIT = 25
 
-    def __init__(self, mw: AnkiQt, parent: QWidget):
+    def __init__(
+        self, mw: AnkiQt, parent: QWidget, starting_deck_id: Optional[DeckId] = None
+    ):
         super().__init__(parent)
         self.mw = mw
         self.config = mw.addonManager.getConfig(__name__)
-        self.setup_ui()
+        self.setup_ui(starting_deck_id)
 
     def update_fields(self, did: DeckId) -> None:
         deck_name = self.deck_chooser.selected_deck_name()
@@ -88,7 +90,7 @@ class DeckSeparatorDialog(QDialog):
 
         self.mw.taskman.run_in_background(collect_fields, on_done=on_done)
 
-    def setup_ui(self) -> None:
+    def setup_ui(self, starting_deck_id: Optional[DeckId]) -> None:
         self.form = Ui_Dialog()
         self.form.setupUi(self)
         self.setWindowTitle(consts.ADDON_LONG_NAME)
@@ -99,10 +101,14 @@ class DeckSeparatorDialog(QDialog):
                 self.form.deckChooser,
                 label=False,
                 on_deck_changed=self.update_fields,
+                starting_deck_id=starting_deck_id,
             )
         else:
             self.deck_chooser = MyDeckChooser(
-                self.mw, self.form.deckChooser, label=False
+                self.mw,
+                self.form.deckChooser,
+                label=False,
+                starting_deck_id=starting_deck_id,
             )
             qconnect(self.deck_chooser.onDeckChanged, self.update_fields)
         qconnect(
@@ -118,20 +124,20 @@ class DeckSeparatorDialog(QDialog):
             lambda t: self.form.duplicateDeckNameLineEdit.setEnabled(t),
         )
 
-    def exec(self) -> int:
-        self.update_fields(self.mw.col.decks.current()["id"])
+    def exec(self, force_duplicate_deck: bool = False) -> int:
+        self.update_fields(self.deck_chooser.selected_deck_id)
         separator_field = self.config["separator_field"]
         number_of_notes = self.config["number_of_notes"]
-        duplicate_deck = self.config["duplicate_deck"]
-        if separator_field := self._get_field(self.fields, separator_field):
+        duplicate_deck = self.config["duplicate_deck"] or force_duplicate_deck
+        if duplicate_deck:
+            self.form.separatorFieldRadioButton.toggled.emit(False)
+            self.form.numberOfCardsRadioButton.toggled.emit(False)
+            self.form.duplicateDeckRadioButton.setChecked(True)
+        elif separator_field := self._get_field(self.fields, separator_field):
             self.form.numberOfCardsRadioButton.toggled.emit(False)
             self.form.duplicateDeckRadioButton.toggled.emit(False)
             self.form.separatorFieldComboBox.setCurrentText(separator_field)
             self.form.separatorFieldRadioButton.setChecked(True)
-        elif duplicate_deck:
-            self.form.separatorFieldRadioButton.toggled.emit(False)
-            self.form.numberOfCardsRadioButton.toggled.emit(False)
-            self.form.duplicateDeckRadioButton.setChecked(True)
         else:
             self.form.separatorFieldRadioButton.toggled.emit(False)
             self.form.duplicateDeckRadioButton.toggled.emit(False)
