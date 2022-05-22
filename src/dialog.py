@@ -5,9 +5,7 @@ from typing import Dict, Iterable, List, Optional
 
 import anki
 from anki.cards import CardId
-from anki.collection import SearchNode
 from anki.decks import DeckId
-from anki.notes import NoteId
 from aqt import qtmajor
 from aqt.deckchooser import DeckChooser
 from aqt.main import AnkiQt
@@ -57,19 +55,17 @@ class DeckSeparatorDialog(QDialog):
     def update_fields(self, did: DeckId) -> None:
         deck_name = self.deck_chooser.selected_deck_name()
         self.form.duplicateDeckNameLineEdit.setText(deck_name + "_dup")
-        self.nids: List[NoteId] = []
-        # self.cids = List[CardId] = []
+        self.cids: List[CardId] = []
         self.fields: List[str] = []
-        search = self.mw.col.build_search_string(SearchNode(deck=deck_name))
         self.mw.progress.start(parent=self, label="Getting field names...")
         self.mw.progress.set_title(consts.ADDON_NAME)
 
         def collect_fields() -> None:
             self.deck_tree = self.mw.col.decks.children(did) + [(deck_name, did)]
-            # self.cids = self.mw.col.decks.cids(did, children=True)
-            for nid in self.mw.col.find_notes(search):
-                self.nids.append(nid)
-                note = self.mw.col.get_note(nid)
+            self.cids = self.mw.col.decks.cids(did, children=True)
+            for cid in self.cids:
+                card = self.mw.col.get_card(cid)
+                note = card.note()
                 for field in note.keys():
                     if field not in self.fields:
                         self.fields.append(field)
@@ -127,7 +123,7 @@ class DeckSeparatorDialog(QDialog):
     def exec(self, force_duplicate_deck: bool = False) -> int:
         self.update_fields(self.deck_chooser.selected_deck_id)
         separator_field = self.config["separator_field"]
-        number_of_notes = self.config["number_of_notes"]
+        number_of_cards = self.config["number_of_cards"]
         duplicate_deck = self.config["duplicate_deck"] or force_duplicate_deck
         if duplicate_deck:
             self.form.separatorFieldRadioButton.toggled.emit(False)
@@ -142,7 +138,7 @@ class DeckSeparatorDialog(QDialog):
             self.form.separatorFieldRadioButton.toggled.emit(False)
             self.form.duplicateDeckRadioButton.toggled.emit(False)
             self.form.numberOfCardsRadioButton.setChecked(True)
-            self.form.numberOfCardsSpinBox.setValue(number_of_notes)
+            self.form.numberOfCardsSpinBox.setValue(number_of_cards)
 
         return super().exec()
 
@@ -159,29 +155,31 @@ class DeckSeparatorDialog(QDialog):
     def _collect_decks(
         self,
         separator_field: str,
-        number_of_notes: int,
+        number_of_cards: int,
         duplicate_deck_name: str,
         selected_deck_name: str,
     ) -> Dict[str, List[CardId]]:
         decks: Dict[str, List[CardId]] = {}
         if separator_field:
-            for i, nid in enumerate(self.nids):
-                note = self.mw.col.get_note(nid)
+            for i, cid in enumerate(self.cids):
+                card = self.mw.col.get_card(cid)
+                note = card.note()
                 if separator_field not in note:
                     continue
                 field_value = strip_html(note[separator_field])
                 if field_value:
                     decks.setdefault(field_value, [])
-                    decks[field_value].extend(note.card_ids())
+                    decks[field_value].append(cid)
                 if i % 100 == 0:
                     self.mw.taskman.run_on_main(
                         lambda i=i: self.mw.progress.update(
-                            f"Processed {i+1} out of {len(self.nids)} notes..."
+                            f"Processed {i+1} out of {len(self.cids)} cards..."
                         )
                     )
         elif duplicate_deck_name:
-            for i, nid in enumerate(self.nids):
-                note = self.mw.col.get_note(nid)
+            for i, cid in enumerate(self.cids):
+                card = self.mw.col.get_card(cid)
+                note = card.note()
                 note_type = note.note_type()
                 dup_note = self.mw.col.new_note(note_type["id"])
                 for key, value in note.items():
@@ -190,8 +188,8 @@ class DeckSeparatorDialog(QDialog):
                 self.mw.col.add_note(dup_note, DeckId(1))
                 dup_note = self.mw.col.get_note(dup_note.id)
                 new_cids = dup_note.card_ids()
-                for cid_i, cid in enumerate(note.card_ids()):
-                    card = self.mw.col.get_card(cid)
+                for cid_i, cid2 in enumerate(note.card_ids()):
+                    card = self.mw.col.get_card(cid2)
                     deck_idx = -1
                     for j, child in enumerate(self.deck_tree):
                         if card.did == child[1]:
@@ -210,27 +208,22 @@ class DeckSeparatorDialog(QDialog):
                 if i % 100 == 0:
                     self.mw.taskman.run_on_main(
                         lambda i=i: self.mw.progress.update(
-                            f"Processed {i+1} out of {len(self.nids)} notes..."
+                            f"Processed {i+1} out of {len(self.cids)} cards..."
                         )
                     )
-
         else:
-            pad = math.ceil(math.log10(len(self.nids)))
-            for i, nid_group in enumerate(groups_of_n(self.nids, number_of_notes)):
-                start = str(i * number_of_notes + 1).zfill(pad)
-                end = str((i + 1) * number_of_notes).zfill(pad)
-                if i * number_of_notes != len(self.nids):
-                    group_len = len(self.nids) - i * number_of_notes
-                    nid_group = nid_group[:group_len]
+            pad = math.ceil(math.log10(len(self.cids)))
+            for i, cid_group in enumerate(groups_of_n(self.cids, number_of_cards)):
+                start = str(i * number_of_cards + 1).zfill(pad)
+                end = str((i + 1) * number_of_cards).zfill(pad)
+                if i * number_of_cards != len(self.cids):
+                    group_len = len(self.cids) - i * number_of_cards
+                    cid_group = cid_group[:group_len]
                 deck_name = f"{start}-{end}"
-                cids: List[CardId] = []
-                for nid in nid_group:
-                    note = self.mw.col.get_note(nid)
-                    cids.extend(note.card_ids())
-                decks[deck_name] = cids
+                decks[deck_name] = cid_group
                 self.mw.taskman.run_on_main(
                     lambda i=i: self.mw.progress.update(
-                        f"Processed {(i+1) * number_of_notes} out of {len(self.nids)} notes..."
+                        f"Processed {(i+1) * number_of_cards} out of {len(self.cids)} cards..."
                     )
                 )
         return decks
@@ -264,13 +257,13 @@ class DeckSeparatorDialog(QDialog):
         )
         deck_name = self.deck_chooser.selected_deck_name()
         parent_deck = self.form.parentDeckLineEdit.text()
-        number_of_notes = self.form.numberOfCardsSpinBox.value()
+        number_of_cards = self.form.numberOfCardsSpinBox.value()
         duplicate_deck = self.form.duplicateDeckRadioButton.isChecked()
         duplicate_deck_name = (
             self.form.duplicateDeckNameLineEdit.text() if duplicate_deck else ""
         )
         self.config["separator_field"] = separator_field
-        self.config["number_of_notes"] = number_of_notes
+        self.config["number_of_cards"] = number_of_cards
         self.config["duplicate_deck"] = duplicate_deck
         self.mw.addonManager.writeConfig(__name__, self.config)
 
@@ -322,7 +315,7 @@ in Anki versions before 2.1.50. Are you sure you want to continue?
         self.mw.progress.set_title(consts.ADDON_NAME)
         self.mw.taskman.run_in_background(
             lambda: self._collect_decks(
-                separator_field, number_of_notes, duplicate_deck_name, deck_name
+                separator_field, number_of_cards, duplicate_deck_name, deck_name
             ),
             on_done=on_done_collecting_decks,
         )

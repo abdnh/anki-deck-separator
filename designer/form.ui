@@ -53,7 +53,7 @@
       <item row="1" column="0">
        <widget class="QRadioButton" name="numberOfCardsRadioButton">
         <property name="text">
-         <string>Separate by number of notes</string>
+         <string>Separate by number of cards</string>
         </property>
        </widget>
       </item>

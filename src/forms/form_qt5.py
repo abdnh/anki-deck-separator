@@ -68,6 +68,6 @@ class Ui_Dialog(object):
         self.label_2.setText(_translate("Dialog", "Deck"))
         self.label.setText(_translate("Dialog", "Parent deck"))
         self.separatorFieldRadioButton.setText(_translate("Dialog", "Separate by field contents"))
-        self.numberOfCardsRadioButton.setText(_translate("Dialog", "Separate by number of notes"))
+        self.numberOfCardsRadioButton.setText(_translate("Dialog", "Separate by number of cards"))
         self.duplicateDeckRadioButton.setText(_translate("Dialog", "Duplicate deck as"))
         self.processButton.setText(_translate("Dialog", "Process"))

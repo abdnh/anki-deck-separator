@@ -1,4 +1,4 @@
-Anki add-on that distributes cards from a chosen deck to multiple decks according to a field's contents or by a maximum number of notes. It also has an option to duplicate cards.
+Anki add-on that distributes cards from a chosen deck to multiple decks according to a field's contents or by a maximum number of cards. It also has an option to duplicate cards.
 
 The add-on's dialog can be accessed from the Tools menu.
 
