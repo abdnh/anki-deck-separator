@@ -22,7 +22,7 @@ def on_deck_browser_will_show_options_menu(menu: QMenu, did: int) -> None:
             mw.reset()
 
     action = menu.addAction("Duplicate")
-    action.triggered.connect(duplicate)
+    qconnect(action.triggered, duplicate)
 
 
 config = mw.addonManager.getConfig(__name__)

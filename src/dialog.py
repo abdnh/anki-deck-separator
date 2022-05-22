@@ -109,15 +109,15 @@ class DeckSeparatorDialog(QDialog):
             qconnect(self.deck_chooser.onDeckChanged, self.update_fields)
         qconnect(
             self.form.separatorFieldRadioButton.toggled,
-            lambda t: self.form.separatorFieldComboBox.setEnabled(t),
+            self.form.separatorFieldComboBox.setEnabled,
         )
         qconnect(
             self.form.numberOfCardsRadioButton.toggled,
-            lambda t: self.form.numberOfCardsSpinBox.setEnabled(t),
+            self.form.numberOfCardsSpinBox.setEnabled,
         )
         qconnect(
             self.form.duplicateDeckRadioButton.toggled,
-            lambda t: self.form.duplicateDeckNameLineEdit.setEnabled(t),
+            self.form.duplicateDeckNameLineEdit.setEnabled,
         )
 
     def exec(self, force_duplicate_deck: bool = False) -> int:
