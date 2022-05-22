@@ -5,3 +5,4 @@ The add-on's dialog can be accessed from the Tools menu.
 ![Add-on's dialog](images/dialog.png)
 
 There is also a "Duplicate" button under the gears icon besides deck names in the main screen.
+The duplication function puts generated siblings of duplicated target cards in the Default deck.
